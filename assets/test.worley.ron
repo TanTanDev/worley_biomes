@@ -1,0 +1,17 @@
+(
+    biome_generator: UniformDistribution,
+    zoom: 40.0,
+    distance_fn: Chebyshev,
+    sharpness: 20.0,
+    k: 3,
+    warp_settings: (
+        strength: 0.6,
+        noise_seed: 0,
+        noise_frequency: 0.7,
+        noise_fractal_lacunarity: 2.0,
+        noise_fractal_gain: 0.6,
+        noise_fractal_octaves: 5,
+        noise_noise_type: PerlinFractal,
+        noise_fractal_type: FBM,
+    ),
+)
