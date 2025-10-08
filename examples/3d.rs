@@ -11,12 +11,13 @@ use bevy_inspector_egui::{
     egui,
     quick::WorldInspectorPlugin,
 };
+use bracket_fast_noise::prelude::*;
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use worley_biomes::{
     biome_picker::{BiomeVariants, SimpleBiomePicker},
     distance_fn::DistanceFn,
-    warp::{FractalType, NoiseType, WarpSettings},
+    warp::WarpSettings,
     worley::Worley,
 };
 
@@ -329,7 +330,6 @@ fn inspector_ui(world: &mut World) {
                                 // REPLACE
                                 let mut map_settings = world.resource_mut::<MapSettings>();
                                 map_settings.worley = new_worley;
-                                map_settings.worley.rebuild_cached_noise();
                                 info!("replaced current worley");
                             }
                             Err(err) => {
@@ -393,57 +393,52 @@ fn inspector_ui(world: &mut World) {
                     )
                     .changed()
                 {
-                    ms.worley.rebuild_cached_noise();
                     any_changed = true;
                 }
                 if ui
                     .add(
-                        egui::Slider::new(&mut ms.worley.warp_settings.noise_frequency, 0.0..=1.0)
+                        egui::Slider::new(&mut ms.worley.warp_settings.noise.frequency, 0.0..=1.0)
                             .text("Warp frequency"),
                     )
                     .changed()
                 {
-                    ms.worley.rebuild_cached_noise();
                     any_changed = true;
                 }
                 if ui
                     .add(
                         egui::Slider::new(
-                            &mut ms.worley.warp_settings.noise_fractal_lacunarity,
+                            &mut ms.worley.warp_settings.noise.fractal_lacunarity,
                             0.0..=4.0,
                         )
                         .text("fractal lacunarity"),
                     )
                     .changed()
                 {
-                    ms.worley.rebuild_cached_noise();
                     any_changed = true;
                 }
 
+                // if ui
+                //     .add(
+                //         egui::Slider::new(
+                //             &mut ms.worley.warp_settings.noise.fractal_gain,
+                //             0.0..=3.0,
+                //         )
+                //         .text("fractal gain"),
+                //     )
+                //     .changed()
+                // {
+                //     any_changed = true;
+                // }
                 if ui
                     .add(
                         egui::Slider::new(
-                            &mut ms.worley.warp_settings.noise_fractal_gain,
-                            0.0..=3.0,
-                        )
-                        .text("fractal gain"),
-                    )
-                    .changed()
-                {
-                    ms.worley.rebuild_cached_noise();
-                    any_changed = true;
-                }
-                if ui
-                    .add(
-                        egui::Slider::new(
-                            &mut ms.worley.warp_settings.noise_fractal_octaves,
+                            &mut ms.worley.warp_settings.noise.fractal_octaves,
                             0..=5,
                         )
                         .text("fractal octaves"),
                     )
                     .changed()
                 {
-                    ms.worley.rebuild_cached_noise();
                     any_changed = true;
                 }
 
@@ -454,13 +449,12 @@ fn inspector_ui(world: &mut World) {
                          noise_type: NoiseType| {
                             if ui
                                 .add(egui::widgets::Button::selectable(
-                                    worley.warp_settings.noise_noise_type == noise_type,
+                                    worley.warp_settings.noise.noise_type == noise_type,
                                     format!("{:?}", noise_type),
                                 ))
                                 .clicked()
                             {
-                                worley.warp_settings.noise_noise_type = noise_type;
-                                worley.rebuild_cached_noise();
+                                worley.warp_settings.noise.noise_type = noise_type;
                                 any_changed = true;
                             }
                         };
@@ -481,13 +475,12 @@ fn inspector_ui(world: &mut World) {
                          fractal_type: FractalType| {
                             if ui
                                 .add(egui::widgets::Button::selectable(
-                                    worley.warp_settings.noise_fractal_type == fractal_type,
+                                    worley.warp_settings.noise.fractal_type == fractal_type,
                                     format!("{:?}", fractal_type),
                                 ))
                                 .clicked()
                             {
-                                worley.warp_settings.noise_fractal_type = fractal_type;
-                                worley.rebuild_cached_noise();
+                                worley.warp_settings.noise.fractal_type = fractal_type;
                                 any_changed = true;
                             }
                         };
@@ -543,6 +536,14 @@ fn move_input(
 }
 
 fn setup(mut commands: Commands) {
+    let mut warp_noise = FastNoise::new();
+    warp_noise.set_seed(0);
+    warp_noise.frequency = 0.7;
+    warp_noise.fractal_lacunarity = 2.0;
+    warp_noise.set_fractal_gain(0.6);
+    warp_noise.fractal_octaves = 3;
+    warp_noise.noise_type = NoiseType::PerlinFractal;
+    warp_noise.fractal_type = FractalType::FBM;
     let mut worley: Worley<BiomeType, SimpleBiomePicker<BiomeType>> = Worley {
         zoom: 62.0,
         distance_fn: DistanceFn::Chebyshev,
@@ -552,17 +553,10 @@ fn setup(mut commands: Commands) {
         k: 3,
         warp_settings: WarpSettings {
             strength: 0.6,
-            noise_seed: 0,
-            noise_frequency: 0.7,
-            noise_fractal_lacunarity: 2.0,
-            noise_fractal_gain: 0.6,
-            noise_fractal_octaves: 5,
-            noise_noise_type: NoiseType::PerlinFractal,
-            noise_fractal_type: FractalType::FBM,
+            noise: warp_noise,
         },
         cached_warp_noise: bracket_fast_noise::prelude::FastNoise::new(),
     };
-    worley.rebuild_cached_noise();
     commands.insert_resource(MapSettings { worley });
 
     commands.spawn((

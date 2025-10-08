@@ -41,10 +41,6 @@ where
     BiomeT: BiomeVariants + 'static + Serialize,
     Picker: BiomePicker<BiomeT> + Serialize,
 {
-    pub fn rebuild_cached_noise(&mut self) {
-        self.cached_warp_noise = self.warp_settings.make_fast_noise();
-    }
-
     ///! returns a vec of (0: percentage) we use for (1: biome type)
     pub fn get(&self, seed: u64, x: f64, z: f64) -> Vec<(f64, BiomeT)> {
         let (x, z) = (x / self.zoom, z / self.zoom);
