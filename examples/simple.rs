@@ -15,8 +15,9 @@ use worley_biomes::{
     worley::Worley,
 };
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
 enum BiomeType {
+    #[default]
     Desert,
     Forest,
     Snow,
@@ -52,27 +53,20 @@ pub const GRID_SIZE: i32 = 32 * 4;
 pub const WORLD_SEED: u64 = 12345;
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let mut warp_noise = FastNoise::new();
-    warp_noise.set_seed(0);
-    warp_noise.frequency = 0.7;
-    warp_noise.fractal_lacunarity = 2.0;
-    warp_noise.set_fractal_gain(0.6);
-    warp_noise.fractal_octaves = 3;
-    warp_noise.noise_type = NoiseType::PerlinFractal;
-    warp_noise.fractal_type = FractalType::FBM;
-    let mut worley: Worley<BiomeType, SimpleBiomePicker<BiomeType>> = Worley {
-        zoom: 62.0,
-        distance_fn: DistanceFn::Chebyshev,
-        biome_picker: SimpleBiomePicker::Any,
-        _phantom: PhantomData::default(),
-        sharpness: 20.0,
-        k: 3,
-        warp_settings: WarpSettings {
-            strength: 0.6,
-            noise: warp_noise,
-        },
-        cached_warp_noise: bracket_fast_noise::prelude::FastNoise::new(),
-    };
+    let mut worley: Worley<BiomeType, SimpleBiomePicker<BiomeType>> = Worley::default();
+    worley.zoom = 62.0;
+    worley.set_distance_fn(DistanceFn::Chebyshev);
+    worley.biome_picker = SimpleBiomePicker::Any;
+    worley.sharpness = 20.0;
+    worley.k = 3;
+    worley.warp_settings.strength = 0.6;
+    worley.warp_settings.noise.set_seed(0);
+    worley.warp_settings.noise.frequency = 0.7;
+    worley.warp_settings.noise.fractal_lacunarity = 2.0;
+    worley.warp_settings.noise.set_fractal_gain(0.6);
+    worley.warp_settings.noise.fractal_octaves = 3;
+    worley.warp_settings.noise.noise_type = NoiseType::PerlinFractal;
+    worley.warp_settings.noise.fractal_type = FractalType::FBM;
 
     let mut img_data = Vec::new();
     for gx in 0..GRID_SIZE {

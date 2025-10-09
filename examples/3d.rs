@@ -22,8 +22,9 @@ use worley_biomes::{
 };
 
 // === Biome system ===
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
 enum BiomeType {
+    #[default]
     Desert,
     Forest,
     Snow,
@@ -359,31 +360,31 @@ fn inspector_ui(world: &mut World) {
                 .add(egui::Slider::new(&mut ms.worley.zoom, 10.0..=200.0).text("Zoom"))
                 .changed();
 
-            egui::CollapsingHeader::new("distance fn").show(ui, |ui| {
-                let mut s = |worley: &mut Worley<BiomeType, SimpleBiomePicker<BiomeType>>,
-                             any_changed: &mut bool,
-                             target_metric: DistanceFn| {
-                    if ui
-                        .add(egui::widgets::Button::selectable(
-                            worley.distance_fn == target_metric,
-                            format!("{:?}", target_metric),
-                        ))
-                        .clicked()
-                    {
-                        worley.distance_fn = target_metric;
-                        *any_changed |= true;
-                    }
-                };
-                s(&mut ms.worley, &mut any_changed, DistanceFn::Euclidean);
-                s(
-                    &mut ms.worley,
-                    &mut any_changed,
-                    DistanceFn::EuclideanSquared,
-                );
-                s(&mut ms.worley, &mut any_changed, DistanceFn::Manhattan);
-                s(&mut ms.worley, &mut any_changed, DistanceFn::Chebyshev);
-                s(&mut ms.worley, &mut any_changed, DistanceFn::Hybrid);
-            });
+            // egui::CollapsingHeader::new("distance fn").show(ui, |ui| {
+            //     let mut s = |worley: &mut Worley<BiomeType, SimpleBiomePicker<BiomeType>>,
+            //                  any_changed: &mut bool,
+            //                  target_metric: DistanceFn| {
+            //         if ui
+            //             .add(egui::widgets::Button::selectable(
+            //                 worley.distance_fn_config == target_metric,
+            //                 format!("{:?}", target_metric),
+            //             ))
+            //             .clicked()
+            //         {
+            //             worley.distance_fn = target_metric;
+            //             *any_changed |= true;
+            //         }
+            //     };
+            //     s(&mut ms.worley, &mut any_changed, DistanceFn::Euclidean);
+            //     s(
+            //         &mut ms.worley,
+            //         &mut any_changed,
+            //         DistanceFn::EuclideanSquared,
+            //     );
+            //     s(&mut ms.worley, &mut any_changed, DistanceFn::Manhattan);
+            //     s(&mut ms.worley, &mut any_changed, DistanceFn::Chebyshev);
+            //     s(&mut ms.worley, &mut any_changed, DistanceFn::Hybrid);
+            // });
 
             ui.group(|ui| {
                 if ui
@@ -536,27 +537,20 @@ fn move_input(
 }
 
 fn setup(mut commands: Commands) {
-    let mut warp_noise = FastNoise::new();
-    warp_noise.set_seed(0);
-    warp_noise.frequency = 0.7;
-    warp_noise.fractal_lacunarity = 2.0;
-    warp_noise.set_fractal_gain(0.6);
-    warp_noise.fractal_octaves = 3;
-    warp_noise.noise_type = NoiseType::PerlinFractal;
-    warp_noise.fractal_type = FractalType::FBM;
-    let mut worley: Worley<BiomeType, SimpleBiomePicker<BiomeType>> = Worley {
-        zoom: 62.0,
-        distance_fn: DistanceFn::Chebyshev,
-        biome_picker: SimpleBiomePicker::Any,
-        _phantom: PhantomData::default(),
-        sharpness: 20.0,
-        k: 3,
-        warp_settings: WarpSettings {
-            strength: 0.6,
-            noise: warp_noise,
-        },
-        cached_warp_noise: bracket_fast_noise::prelude::FastNoise::new(),
-    };
+    let mut worley: Worley<BiomeType, SimpleBiomePicker<BiomeType>> = Worley::default();
+    worley.zoom = 62.0;
+    worley.set_distance_fn(DistanceFn::Chebyshev);
+    worley.biome_picker = SimpleBiomePicker::Any;
+    worley.sharpness = 20.0;
+    worley.k = 3;
+    worley.warp_settings.strength = 0.6;
+    worley.warp_settings.noise.set_seed(0);
+    worley.warp_settings.noise.frequency = 0.7;
+    worley.warp_settings.noise.fractal_lacunarity = 2.0;
+    worley.warp_settings.noise.set_fractal_gain(0.6);
+    worley.warp_settings.noise.fractal_octaves = 3;
+    worley.warp_settings.noise.noise_type = NoiseType::PerlinFractal;
+    worley.warp_settings.noise.fractal_type = FractalType::FBM;
     commands.insert_resource(MapSettings { worley });
 
     commands.spawn((

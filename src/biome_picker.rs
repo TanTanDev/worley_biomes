@@ -13,9 +13,10 @@ pub trait BiomeVariants: Copy {
 }
 
 ///! used to generates a biome VARIANT, based upon a "cell" position
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub enum SimpleBiomePicker<BiomeT: BiomeVariants> {
     // all variants have same chance of being selected
+    #[default]
     Any,
     // all variants have same chance of being selected
     AnyOf(Vec<BiomeT>),
@@ -24,6 +25,7 @@ pub enum SimpleBiomePicker<BiomeT: BiomeVariants> {
 }
 
 impl<BiomeT: BiomeVariants + 'static> BiomePicker<BiomeT> for SimpleBiomePicker<BiomeT> {
+    #[inline(always)]
     fn pick_biome(&self, seed: u64, cell_x: i32, cell_z: i32) -> BiomeT {
         match self {
             SimpleBiomePicker::Any => {
