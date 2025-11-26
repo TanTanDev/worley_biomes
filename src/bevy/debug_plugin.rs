@@ -1,23 +1,20 @@
 use bevy::prelude::*;
 
-use std::{collections::HashMap, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::{
     biome_picker::{BiomePicker, BiomeVariants},
     distance_fn::DistanceFn,
-    warp::WarpSettings,
     worley::Worley,
 };
 use bevy::{
     asset::RenderAssetUsages,
     image::ImageSampler,
-    prelude::*,
     render::render_resource::{Extent3d, TextureDimension},
 };
 use bevy_inspector_egui::{
-    bevy_egui::{self, EguiContext, EguiPlugin, EguiPrimaryContextPass},
+    bevy_egui::{self, EguiContext, EguiPrimaryContextPass},
     egui,
-    quick::WorldInspectorPlugin,
 };
 use bracket_fast_noise::prelude::*;
 use ron::ser::PrettyConfig;
@@ -44,12 +41,18 @@ pub struct DebugPluginSettings {
     ///! true: plugin will spawn a ui entity for showcasing worley
     ///! false: don't spawn it. (you can manually do so if you need customization)
     pub spawn_preview_image: bool,
+
+    // preview + ui visibility controll
+    pub show_preview_image: bool,
+    pub show_inspector_ui: bool,
 }
 
 impl Default for DebugPluginSettings {
     fn default() -> Self {
         Self {
             spawn_preview_image: true,
+            show_preview_image: true,
+            show_inspector_ui: true,
         }
     }
 }
@@ -77,14 +80,19 @@ where
         app.insert_resource(self.settings.clone());
         app.add_systems(
             EguiPrimaryContextPass,
-            inspector_ui::<WorleyResT, BiomeT, Picker>,
+            inspector_ui::<WorleyResT, BiomeT, Picker>.run_if(if_show_inspector),
         );
         app.add_systems(Update, texture_tap);
+        app.add_systems(Update, update_preview_visibility);
         app.add_systems(
             PostUpdate,
             rebuild_preview_image::<WorleyResT, BiomeT, Picker>,
         );
     }
+}
+
+pub fn if_show_inspector(settings: Res<DebugPluginSettings>) -> bool {
+    settings.show_inspector_ui
 }
 
 ///! color of biome to display in debug worley texture
@@ -152,7 +160,6 @@ fn rebuild_preview_image<WorleyResT, BiomeT, Picker>(
     map_settings: Res<WorleyResT>,
     debug_plugin_settings: Res<DebugPluginSettings>,
     mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut worley_image: Option<ResMut<WorleyImage>>,
 ) where
@@ -226,6 +233,7 @@ fn rebuild_preview_image<WorleyResT, BiomeT, Picker>(
                     },
                     ImageNode::new(image_handle.clone()),
                     DisplayTextureSize::default(),
+                    WorleyUiPreviewTag,
                     Button,
                 ));
             }
@@ -234,6 +242,28 @@ fn rebuild_preview_image<WorleyResT, BiomeT, Picker>(
                 handle: image_handle,
                 preview_offset: (0.0, 0.0),
             });
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct WorleyUiPreviewTag;
+
+fn update_preview_visibility(
+    settings: Res<DebugPluginSettings>,
+    mut query: Query<&mut Node, With<WorleyUiPreviewTag>>,
+) {
+    if !settings.is_changed() {
+        return;
+    }
+    for mut node in query.iter_mut() {
+        match settings.show_preview_image {
+            true => {
+                node.display = Display::Flex;
+            }
+            false => {
+                node.display = Display::None;
+            }
         }
     }
 }
@@ -295,7 +325,7 @@ where
                             Ok(new_worley) => {
                                 // REPLACE
                                 let mut map_settings = world.resource_mut::<WorleyResT>();
-                                let mut worley = map_settings.get_worley_mut();
+                                let worley = map_settings.get_worley_mut();
                                 *worley = new_worley;
                                 info!("replaced current worley");
                             }
@@ -323,7 +353,7 @@ where
                 .changed();
 
             any_changed |= ui
-                .add(egui::Slider::new(&mut worley.k, 1..=5).text("k (nearest)"))
+                .add(egui::Slider::new(&mut worley.k, 1..=8).text("k (nearest)"))
                 .changed();
             any_changed |= ui
                 .add(egui::Slider::new(&mut worley.zoom, 10.0..=200.0).text("Zoom"))

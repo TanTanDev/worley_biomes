@@ -1,19 +1,12 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::collections::HashMap;
 
-use bevy::{
-    asset::RenderAssetUsages,
-    image::ImageSampler,
-    prelude::*,
-    render::render_resource::{Extent3d, TextureDimension},
-};
+use bevy::prelude::*;
 use bracket_fast_noise::prelude::*;
-use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use worley_biomes::{
     bevy::debug_plugin::{DebugColor, DebugPluginSettings, GetWorley, WorleyImage},
     biome_picker::{BiomeVariants, SimpleBiomePicker},
     distance_fn::DistanceFn,
-    warp::WarpSettings,
     worley::Worley,
 };
 
@@ -62,6 +55,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin::default())
         .add_plugins(WorldInspectorPlugin::new())
+        // THE DEBUG PLUGIN for worley preview + tweak ui
         .add_plugins(worley_biomes::bevy::debug_plugin::DebugPlugin::<
             WorleyHolder,
             BiomeType,
@@ -69,6 +63,8 @@ fn main() {
         > {
             settings: DebugPluginSettings {
                 spawn_preview_image: true,
+                show_preview_image: true,
+                show_inspector_ui: true,
             },
             ..default()
         })
@@ -76,9 +72,9 @@ fn main() {
         .insert_resource(Offset { x: 0.0, z: 0.0 })
         .add_systems(Startup, setup)
         .add_systems(Startup, setup_voxels)
-        .add_systems(PostUpdate, rebuild_map)
+        .add_systems(PostUpdate, update_voxel_from_worley)
         .add_systems(Update, move_input)
-        // .add_systems(Update, texture_tap)
+        .add_systems(Update, toggle_preview_visibility)
         .add_systems(Update, animate_height)
         .run();
 }
@@ -113,6 +109,19 @@ struct VoxelCoord {
     gz: i32,
 }
 
+// tap space to show/hide the preview image and tweak ui
+fn toggle_preview_visibility(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut debug_plugin_settings: ResMut<DebugPluginSettings>,
+) {
+    if !keyboard.just_pressed(KeyCode::Space) {
+        return;
+    }
+    // toggle visibility, and keep the show, in sync
+    debug_plugin_settings.show_preview_image = !debug_plugin_settings.show_preview_image;
+    debug_plugin_settings.show_inspector_ui = debug_plugin_settings.show_preview_image;
+}
+
 ///! initially spawn all "voxels"
 fn setup_voxels(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     // one shared cube mesh
@@ -121,7 +130,6 @@ fn setup_voxels(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     for gx in 0..GRID_SIZE {
         for gz in 0..GRID_SIZE {
             commands.spawn((
-                VoxelTag,
                 VoxelCoord { gx, gz },
                 Mesh3d(cube_mesh.clone()),
                 // assign a default material for now, will be updated later
@@ -141,27 +149,23 @@ fn setup_voxels(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
 #[derive(Component)]
 pub struct TargetHeight(f32);
 
-// ///! fetch worley data to UPDATE the voxel height + material
-fn rebuild_map(
-    map_settings: Res<WorleyHolder>,
-    mut voxels: Query<
-        (
-            &VoxelCoord,
-            &mut MeshMaterial3d<StandardMaterial>,
-            &mut TargetHeight,
-        ),
-        With<VoxelTag>,
-    >,
-    mut commands: Commands,
+///! fetch worley data to UPDATE the voxel height + material
+fn update_voxel_from_worley(
+    worley_holder: Res<WorleyHolder>,
+    mut voxels: Query<(
+        &VoxelCoord,
+        &mut MeshMaterial3d<StandardMaterial>,
+        &mut TargetHeight,
+    )>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut voxel_materials: ResMut<VoxelMaterials>,
     offset: Res<Offset>,
 ) {
-    if !map_settings.is_changed() {
+    if !worley_holder.is_changed() {
         return;
     }
 
-    let worley = &map_settings.worley;
+    let worley = &worley_holder.worley;
 
     for (coord, mut mat, mut target_height) in voxels.iter_mut() {
         let gx = coord.gx;
@@ -203,9 +207,7 @@ fn animate_height(mut query: Query<(&mut Transform, &TargetHeight)>, time: Res<T
     }
 }
 
-#[derive(Component)]
-pub struct VoxelTag;
-
+///! offset the worley position, so we can move around
 #[derive(Resource)]
 pub struct Offset {
     x: f64,
@@ -216,7 +218,7 @@ fn move_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut offset: ResMut<Offset>,
     time: Res<Time>,
-    mut map_settings: ResMut<WorleyHolder>,
+    mut worley_holder: ResMut<WorleyHolder>,
     mut worley_image: Option<ResMut<WorleyImage>>,
 ) {
     let speed = 32.0;
@@ -239,7 +241,7 @@ fn move_input(
         changed = true;
     }
     if changed {
-        map_settings.set_changed();
+        worley_holder.set_changed();
         if let Some(worley_image) = &mut worley_image {
             worley_image.preview_offset.0 = offset.x;
             worley_image.preview_offset.1 = offset.z;
@@ -248,6 +250,7 @@ fn move_input(
 }
 
 fn setup(mut commands: Commands) {
+    // SETUP OUR WORLEY VALUES
     let mut worley: Worley<BiomeType, SimpleBiomePicker<BiomeType>> = Worley::default();
     worley.zoom = 62.0;
     worley.set_distance_fn(DistanceFn::Chebyshev);

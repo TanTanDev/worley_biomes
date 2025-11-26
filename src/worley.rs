@@ -38,7 +38,7 @@ where
 
 // euclidian squared
 fn default_distance_fn() -> fn(f64, f64) -> f64 {
-    |dx, dz| (dx * dx + dz * dz)
+    |dx, dz| dx * dx + dz * dz
 }
 
 impl<BiomeT, Picker> Default for Worley<BiomeT, Picker>
