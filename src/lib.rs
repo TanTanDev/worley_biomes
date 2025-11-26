@@ -6,3 +6,9 @@ pub mod worley;
 
 #[cfg(feature = "bevy")]
 pub mod bevy;
+
+pub mod prelude {
+    pub use crate::biome_picker::BiomeVariants;
+    pub use crate::biome_picker::SimpleBiomePicker;
+    pub use crate::worley::Worley;
+}
