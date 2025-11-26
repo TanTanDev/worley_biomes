@@ -21,14 +21,14 @@ impl BiomeVariants for BiomeType {
 
 #[inline]
 fn sample_worley(worley: &Worley<BiomeType, SimpleBiomePicker<BiomeType>>, x: f64, z: f64) {
-    let _ = worley.get(0, x, z);
+    let _ = worley.get(x, z);
 }
 
 #[inline]
 fn sample_32x32(worley: &Worley<BiomeType, SimpleBiomePicker<BiomeType>>) {
     for z in 0..32 {
         for x in 0..32 {
-            let _ = worley.get(0, x as f64, z as f64);
+            let _ = worley.get(x as f64, z as f64);
         }
     }
 }
@@ -41,8 +41,8 @@ fn heavy_k_post_calculation(
     x: f64,
     z: f64,
 ) {
-    let biomes = worley.get(0, x as f64, z as f64);
-    for (_biome, weight) in biomes.iter() {
+    let biomes = worley.get(x as f64, z as f64);
+    for (_biome, _weight) in biomes.iter() {
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
