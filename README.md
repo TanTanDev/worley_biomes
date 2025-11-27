@@ -11,6 +11,14 @@ This library uses a fork of [bracket-noise](https://crates.io/crates/bracket-noi
 
 My fork implements serde serialization/deserialization. I haven't done performance comparisons with other libraries, it does the job well, and I like the api. 
 
+
+## Bevy support table
+
+| bevy | worley biomes |
+| ---- | ------------------- |
+| 0.16 | 0.1.0               |
+
+
 ## License
 worley_biomes is free and open source! All code in this repository is dual-licensed under either:
 
