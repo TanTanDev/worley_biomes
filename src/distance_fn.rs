@@ -1,7 +1,10 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 ///! what distance function to use to measure distance to worlay
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DistanceFn {
     Euclidean,
     EuclideanSquared,

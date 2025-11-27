@@ -1,7 +1,9 @@
 use bracket_fast_noise::prelude::FastNoise;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Default)]
 pub struct WarpSettings {
     pub strength: f32,
     pub noise: FastNoise,

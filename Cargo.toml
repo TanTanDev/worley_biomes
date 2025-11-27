@@ -4,21 +4,25 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["bevy"]
+default = []
 bevy = ["dep:bevy", "dep:bevy-inspector-egui"]
+serde = ["dep:serde", "dep:ron"]
 
 [dependencies]
 bracket-fast-noise = {git="ssh://git@github.com/TanTanDev/bracket-fast-noise.git", rev = "993b54ae2216"}
 rand = "0.9.2"
-ron = "0.12"
 tinyvec = "1.10"
-serde = { version= "1", features = ["derive"] }
+
+# optional serialization
+serde = { version= "1", features = ["derive"], optional = true }
+ron = {version = "0.12", optional = true}
 
 # not required, used in examples, and we have a debug_plugin for bevy 
 bevy = {version = "0.16.0", optional = true}
 bevy-inspector-egui = {version = "0.33.1", optional = true}
 
 [dev-dependencies]
+# benchmarking
 criterion = {version="0.7", features = ["html_reports"]}
 
 [[example]]

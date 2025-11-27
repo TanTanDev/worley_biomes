@@ -17,20 +17,19 @@ use bevy_inspector_egui::{
     egui,
 };
 use bracket_fast_noise::prelude::*;
+
+#[cfg(feature = "serde")]
 use ron::ser::PrettyConfig;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-///! VISUALIZE + TWEAK UI, worley
 #[derive(Default)]
 pub struct DebugPlugin<WorleyResT, BiomeT, Picker>
 where
     WorleyResT: Resource + GetWorley<BiomeT, Picker>,
-    BiomeT: BiomeVariants
-        + DebugColor<BiomeT>
-        + Serialize
-        + for<'de> Deserialize<'de>
-        + std::default::Default,
-    Picker: BiomePicker<BiomeT> + Serialize + Default + for<'de> Deserialize<'de>,
+    BiomeT: BiomeVariants + DebugColor<BiomeT> + std::default::Default,
+    Picker: BiomePicker<BiomeT> + Default,
 {
     pub settings: DebugPluginSettings,
     pub _phantom: PhantomData<(WorleyResT, BiomeT, Picker)>,
@@ -57,24 +56,51 @@ impl Default for DebugPluginSettings {
     }
 }
 
+// I HATE THIS lol
+// explanation: i have identical plugin implementations, but when using serde,
+// we require Serialize and Deserialize bounds on BiomeT and Picker.
+#[cfg(feature = "serde")]
 impl<WorleyResT, BiomeT, Picker> Plugin for DebugPlugin<WorleyResT, BiomeT, Picker>
 where
     WorleyResT: Resource + GetWorley<BiomeT, Picker>,
     BiomeT: BiomeVariants
         + DebugColor<BiomeT>
-        + Serialize
-        + for<'de> Deserialize<'de>
         + Sync
         + Send
         + std::default::Default
-        + 'static,
-    Picker: BiomePicker<BiomeT>
+        + 'static
         + Serialize
+        + for<'de> Deserialize<'de>,
+    Picker: BiomePicker<BiomeT>
         + Default
-        + for<'de> Deserialize<'de>
         + Sync
         + Send
-        + 'static,
+        + 'static
+        + Serialize
+        + for<'de> Deserialize<'de>,
+{
+    fn build(&self, app: &mut App) {
+        app.insert_resource(self.settings.clone());
+        app.add_systems(
+            EguiPrimaryContextPass,
+            inspector_ui::<WorleyResT, BiomeT, Picker>.run_if(if_show_inspector),
+        );
+        app.add_systems(Update, texture_tap);
+        app.add_systems(Update, update_preview_visibility);
+        app.add_systems(
+            PostUpdate,
+            rebuild_preview_image::<WorleyResT, BiomeT, Picker>,
+        );
+    }
+}
+
+// "I HATE THIS lol" our duplicate of plugin without serde bounds
+#[cfg(not(feature = "serde"))]
+impl<WorleyResT, BiomeT, Picker> Plugin for DebugPlugin<WorleyResT, BiomeT, Picker>
+where
+    WorleyResT: Resource + GetWorley<BiomeT, Picker>,
+    BiomeT: BiomeVariants + DebugColor<BiomeT> + Sync + Send + std::default::Default + 'static,
+    Picker: BiomePicker<BiomeT> + Default + Sync + Send + 'static,
 {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings.clone());
@@ -103,8 +129,8 @@ pub trait DebugColor<BiomeT> {
 ///! required for the debug_plugin to find what worley to visualize
 pub trait GetWorley<BiomeT, Picker>
 where
-    BiomeT: BiomeVariants + Serialize,
-    Picker: BiomePicker<BiomeT> + Serialize + Default,
+    BiomeT: BiomeVariants,
+    Picker: BiomePicker<BiomeT> + Default,
 {
     fn get_worley<'a>(&'a self) -> &'a Worley<BiomeT, Picker>;
     fn get_worley_mut<'a>(&'a mut self) -> &'a mut Worley<BiomeT, Picker>;
@@ -164,8 +190,8 @@ fn rebuild_preview_image<WorleyResT, BiomeT, Picker>(
     mut worley_image: Option<ResMut<WorleyImage>>,
 ) where
     WorleyResT: Resource + GetWorley<BiomeT, Picker>,
-    BiomeT: BiomeVariants + Serialize + 'static + DebugColor<BiomeT> + std::default::Default,
-    Picker: BiomePicker<BiomeT> + Serialize + Default + 'static,
+    BiomeT: BiomeVariants + 'static + DebugColor<BiomeT> + std::default::Default,
+    Picker: BiomePicker<BiomeT> + Default + 'static,
 {
     if !map_settings.is_changed() {
         return;
@@ -285,11 +311,12 @@ impl FromWorld for SaveWorleyFilename {
     }
 }
 
-fn inspector_ui<WorleyResT, BiomeT, Picker>(world: &mut World)
+#[cfg(not(feature = "serde"))]
+fn inspector_ui<WorleyResT, BiomeT, Picker>(mut world: &mut World)
 where
     WorleyResT: Resource + GetWorley<BiomeT, Picker>,
-    BiomeT: BiomeVariants + Serialize + for<'de> Deserialize<'de> + 'static,
-    Picker: BiomePicker<BiomeT> + Serialize + Default + for<'de> Deserialize<'de> + 'static,
+    BiomeT: BiomeVariants + 'static,
+    Picker: BiomePicker<BiomeT> + Default + 'static,
 {
     let mut egui_context = world
         .query_filtered::<&mut EguiContext, With<bevy_egui::PrimaryEguiContext>>()
@@ -299,21 +326,51 @@ where
 
     egui::Window::new("worley UI").show(egui_context.get_mut(), |ui| {
         egui::ScrollArea::both().show(ui, |ui| {
+            // SERIALIZE FEATURES disabled
+            let mut worley_file_name = world.get_resource_or_init::<SaveWorleyFilename>();
+            ui.add_enabled(false, egui::Button::new("save worley to file"));
+            ui.colored_label(egui::Color32::RED, "saving requires feature=\"serde\"");
+            ui.add_enabled(false, egui::Button::new("Load worley file"));
+            ui.colored_label(egui::Color32::RED, "loading requires feature=\"serde\"");
+
+            tweak_ui::<WorleyResT, BiomeT, Picker>(ui, &mut world);
+        });
+    });
+}
+
+#[cfg(feature = "serde")]
+fn inspector_ui<WorleyResT, BiomeT, Picker>(mut world: &mut World)
+where
+    WorleyResT: Resource + GetWorley<BiomeT, Picker>,
+    BiomeT: BiomeVariants + 'static + Serialize + for<'de> Deserialize<'de>,
+    Picker: BiomePicker<BiomeT> + Default + 'static + Serialize + for<'de> Deserialize<'de>,
+{
+    let mut egui_context = world
+        .query_filtered::<&mut EguiContext, With<bevy_egui::PrimaryEguiContext>>()
+        .single(world)
+        .expect("EguiContext not found")
+        .clone();
+
+    egui::Window::new("worley UI").show(egui_context.get_mut(), |ui| {
+        egui::ScrollArea::both().show(ui, |ui| {
+            // SERIALIZE FEATURES to save/load our worley to file
             let mut worley_file_name = world.get_resource_or_init::<SaveWorleyFilename>();
             ui.add(egui::Label::new("worley file name: (save or load)"));
             ui.add(egui::TextEdit::singleline(&mut worley_file_name.0));
             let file_name = worley_file_name.0.clone();
+
             if ui.add(egui::Button::new("save worley to file")).clicked() {
-                info!("save");
-                // let map_settings = world.get_resource::<MapSettings>().expect("map settings");
                 let map_settings = world.get_resource::<WorleyResT>().expect("WorleyResT");
+
                 let deserialized =
                     ron::ser::to_string_pretty(map_settings.get_worley(), PrettyConfig::default())
                         .expect("deserialize");
+
                 let path = format!("assets/{}.worley.ron", &file_name);
                 let result = std::fs::write(&path, deserialized);
                 info!("saving {:?} result: {:?}", path, result);
             }
+
             if ui.add(egui::Button::new("load worley file")).clicked() {
                 info!("load");
                 let path = format!("assets/{}.worley.ron", &file_name);
@@ -340,156 +397,165 @@ where
                 }
             }
 
-            let mut map_settings = world.resource_mut::<WorleyResT>();
-            let ms = map_settings.bypass_change_detection();
-            let mut worley = ms.get_worley_mut();
-
-            let mut any_changed = false;
-            any_changed |= ui
-                .add(egui::Slider::new(&mut worley.seed, 0..=100).text("seed"))
-                .changed();
-            any_changed |= ui
-                .add(egui::Slider::new(&mut worley.sharpness, 0.5..=20.0).text("Sharpness"))
-                .changed();
-
-            any_changed |= ui
-                .add(egui::Slider::new(&mut worley.k, 1..=8).text("k (nearest)"))
-                .changed();
-            any_changed |= ui
-                .add(egui::Slider::new(&mut worley.zoom, 10.0..=200.0).text("Zoom"))
-                .changed();
-
-            let mut kill_per = worley.kill_percent_threshold.unwrap_or(0.0);
-            let kill_per_changed = ui
-                .add(egui::Slider::new(&mut kill_per, 0.0..=0.99).text("kill threshold"))
-                .changed();
-            any_changed |= kill_per_changed;
-            if kill_per_changed {
-                worley.kill_percent_threshold = Some(kill_per);
-            }
-
-            egui::CollapsingHeader::new("distance fn").show(ui, |ui| {
-                let mut s = |worley: &mut Worley<BiomeT, Picker>,
-                             any_changed: &mut bool,
-                             target_metric: DistanceFn| {
-                    if ui
-                        .add(egui::widgets::Button::selectable(
-                            worley.distance_fn_config == target_metric,
-                            format!("{:?}", target_metric),
-                        ))
-                        .clicked()
-                    {
-                        worley.distance_fn_config = target_metric;
-                        worley.distance_fn = target_metric.to_func();
-                        *any_changed |= true;
-                    }
-                };
-                s(&mut worley, &mut any_changed, DistanceFn::Euclidean);
-                s(&mut worley, &mut any_changed, DistanceFn::EuclideanSquared);
-                s(&mut worley, &mut any_changed, DistanceFn::Manhattan);
-                s(&mut worley, &mut any_changed, DistanceFn::Chebyshev);
-                s(&mut worley, &mut any_changed, DistanceFn::Hybrid);
-            });
-
-            ui.group(|ui| {
-                if ui
-                    .add(
-                        egui::Slider::new(&mut worley.warp_settings.strength, 0.0..=3.0)
-                            .text("Warp strength"),
-                    )
-                    .changed()
-                {
-                    any_changed = true;
-                }
-                if ui
-                    .add(
-                        egui::Slider::new(&mut worley.warp_settings.noise.frequency, 0.0..=1.0)
-                            .text("Warp frequency"),
-                    )
-                    .changed()
-                {
-                    any_changed = true;
-                }
-                if ui
-                    .add(
-                        egui::Slider::new(
-                            &mut worley.warp_settings.noise.fractal_lacunarity,
-                            0.0..=4.0,
-                        )
-                        .text("fractal lacunarity"),
-                    )
-                    .changed()
-                {
-                    any_changed = true;
-                }
-
-                let mut fractal_gain = worley.warp_settings.noise.get_fractal_gain();
-                if ui
-                    .add(egui::Slider::new(&mut fractal_gain, 0.0..=3.0).text("fractal gain"))
-                    .changed()
-                {
-                    worley.warp_settings.noise.set_fractal_gain(fractal_gain);
-                    any_changed = true;
-                }
-                if ui
-                    .add(
-                        egui::Slider::new(&mut worley.warp_settings.noise.fractal_octaves, 0..=5)
-                            .text("fractal octaves"),
-                    )
-                    .changed()
-                {
-                    any_changed = true;
-                }
-
-                ui.label("warp noise");
-                egui::CollapsingHeader::new("noise type").show(ui, |ui| {
-                    let mut noise = |worley: &mut Worley<BiomeT, Picker>, noise_type: NoiseType| {
-                        if ui
-                            .add(egui::widgets::Button::selectable(
-                                worley.warp_settings.noise.noise_type == noise_type,
-                                format!("{:?}", noise_type),
-                            ))
-                            .clicked()
-                        {
-                            worley.warp_settings.noise.noise_type = noise_type;
-                            any_changed = true;
-                        }
-                    };
-                    noise(&mut worley, NoiseType::Value);
-                    noise(&mut worley, NoiseType::ValueFractal);
-                    noise(&mut worley, NoiseType::Perlin);
-                    noise(&mut worley, NoiseType::PerlinFractal);
-                    noise(&mut worley, NoiseType::Simplex);
-                    noise(&mut worley, NoiseType::SimplexFractal);
-                    noise(&mut worley, NoiseType::Cellular);
-                    noise(&mut worley, NoiseType::WhiteNoise);
-                    noise(&mut worley, NoiseType::Cubic);
-                    noise(&mut worley, NoiseType::CubicFractal);
-                });
-                egui::CollapsingHeader::new("fractal type").show(ui, |ui| {
-                    let mut frac = |worley: &mut Worley<BiomeT, Picker>,
-                                    fractal_type: FractalType| {
-                        if ui
-                            .add(egui::widgets::Button::selectable(
-                                worley.warp_settings.noise.fractal_type == fractal_type,
-                                format!("{:?}", fractal_type),
-                            ))
-                            .clicked()
-                        {
-                            worley.warp_settings.noise.fractal_type = fractal_type;
-                            any_changed = true;
-                        }
-                    };
-                    frac(&mut worley, FractalType::FBM);
-                    frac(&mut worley, FractalType::Billow);
-                    frac(&mut worley, FractalType::RigidMulti);
-                });
-            });
-
-            if any_changed {
-                // trigger change to MapSettings, causing an update to voxels
-                map_settings.set_changed();
-            }
+            tweak_ui::<WorleyResT, BiomeT, Picker>(ui, &mut world);
         });
     });
+}
+
+// tweaking ui for Worley
+fn tweak_ui<WorleyResT, BiomeT, Picker>(ui: &mut egui::Ui, world: &mut World)
+where
+    WorleyResT: Resource + GetWorley<BiomeT, Picker>,
+    BiomeT: BiomeVariants + 'static,
+    Picker: BiomePicker<BiomeT> + Default + 'static,
+{
+    let mut map_settings = world.resource_mut::<WorleyResT>();
+    let ms = map_settings.bypass_change_detection();
+    let mut worley = ms.get_worley_mut();
+
+    let mut any_changed = false;
+    any_changed |= ui
+        .add(egui::Slider::new(&mut worley.seed, 0..=100).text("seed"))
+        .changed();
+    any_changed |= ui
+        .add(egui::Slider::new(&mut worley.sharpness, 0.5..=20.0).text("Sharpness"))
+        .changed();
+
+    any_changed |= ui
+        .add(egui::Slider::new(&mut worley.k, 1..=8).text("k (nearest)"))
+        .changed();
+    any_changed |= ui
+        .add(egui::Slider::new(&mut worley.zoom, 10.0..=200.0).text("Zoom"))
+        .changed();
+
+    let mut kill_per = worley.kill_percent_threshold.unwrap_or(0.0);
+    let kill_per_changed = ui
+        .add(egui::Slider::new(&mut kill_per, 0.0..=0.99).text("kill threshold"))
+        .changed();
+    any_changed |= kill_per_changed;
+    if kill_per_changed {
+        worley.kill_percent_threshold = Some(kill_per);
+    }
+
+    egui::CollapsingHeader::new("distance fn").show(ui, |ui| {
+        let mut s = |worley: &mut Worley<BiomeT, Picker>,
+                     any_changed: &mut bool,
+                     target_metric: DistanceFn| {
+            if ui
+                .add(egui::widgets::Button::selectable(
+                    worley.distance_fn_config == target_metric,
+                    format!("{:?}", target_metric),
+                ))
+                .clicked()
+            {
+                worley.distance_fn_config = target_metric;
+                worley.distance_fn = target_metric.to_func();
+                *any_changed |= true;
+            }
+        };
+        s(&mut worley, &mut any_changed, DistanceFn::Euclidean);
+        s(&mut worley, &mut any_changed, DistanceFn::EuclideanSquared);
+        s(&mut worley, &mut any_changed, DistanceFn::Manhattan);
+        s(&mut worley, &mut any_changed, DistanceFn::Chebyshev);
+        s(&mut worley, &mut any_changed, DistanceFn::Hybrid);
+    });
+
+    ui.group(|ui| {
+        if ui
+            .add(
+                egui::Slider::new(&mut worley.warp_settings.strength, 0.0..=3.0)
+                    .text("Warp strength"),
+            )
+            .changed()
+        {
+            any_changed = true;
+        }
+        if ui
+            .add(
+                egui::Slider::new(&mut worley.warp_settings.noise.frequency, 0.0..=1.0)
+                    .text("Warp frequency"),
+            )
+            .changed()
+        {
+            any_changed = true;
+        }
+        if ui
+            .add(
+                egui::Slider::new(
+                    &mut worley.warp_settings.noise.fractal_lacunarity,
+                    0.0..=4.0,
+                )
+                .text("fractal lacunarity"),
+            )
+            .changed()
+        {
+            any_changed = true;
+        }
+
+        let mut fractal_gain = worley.warp_settings.noise.get_fractal_gain();
+        if ui
+            .add(egui::Slider::new(&mut fractal_gain, 0.0..=3.0).text("fractal gain"))
+            .changed()
+        {
+            worley.warp_settings.noise.set_fractal_gain(fractal_gain);
+            any_changed = true;
+        }
+        if ui
+            .add(
+                egui::Slider::new(&mut worley.warp_settings.noise.fractal_octaves, 0..=5)
+                    .text("fractal octaves"),
+            )
+            .changed()
+        {
+            any_changed = true;
+        }
+
+        ui.label("warp noise");
+        egui::CollapsingHeader::new("noise type").show(ui, |ui| {
+            let mut noise = |worley: &mut Worley<BiomeT, Picker>, noise_type: NoiseType| {
+                if ui
+                    .add(egui::widgets::Button::selectable(
+                        worley.warp_settings.noise.noise_type == noise_type,
+                        format!("{:?}", noise_type),
+                    ))
+                    .clicked()
+                {
+                    worley.warp_settings.noise.noise_type = noise_type;
+                    any_changed = true;
+                }
+            };
+            noise(&mut worley, NoiseType::Value);
+            noise(&mut worley, NoiseType::ValueFractal);
+            noise(&mut worley, NoiseType::Perlin);
+            noise(&mut worley, NoiseType::PerlinFractal);
+            noise(&mut worley, NoiseType::Simplex);
+            noise(&mut worley, NoiseType::SimplexFractal);
+            noise(&mut worley, NoiseType::Cellular);
+            noise(&mut worley, NoiseType::WhiteNoise);
+            noise(&mut worley, NoiseType::Cubic);
+            noise(&mut worley, NoiseType::CubicFractal);
+        });
+        egui::CollapsingHeader::new("fractal type").show(ui, |ui| {
+            let mut frac = |worley: &mut Worley<BiomeT, Picker>, fractal_type: FractalType| {
+                if ui
+                    .add(egui::widgets::Button::selectable(
+                        worley.warp_settings.noise.fractal_type == fractal_type,
+                        format!("{:?}", fractal_type),
+                    ))
+                    .clicked()
+                {
+                    worley.warp_settings.noise.fractal_type = fractal_type;
+                    any_changed = true;
+                }
+            };
+            frac(&mut worley, FractalType::FBM);
+            frac(&mut worley, FractalType::Billow);
+            frac(&mut worley, FractalType::RigidMulti);
+        });
+    });
+
+    if any_changed {
+        // trigger change to MapSettings, causing an update to voxels
+        map_settings.set_changed();
+    }
 }

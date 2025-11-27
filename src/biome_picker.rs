@@ -1,4 +1,5 @@
 use rand::Rng;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::utils::{hash_u64, seeded_rng};
@@ -13,7 +14,8 @@ pub trait BiomeVariants: Copy {
 }
 
 ///! used to generates a biome VARIANT, based upon a "cell" position
-#[derive(Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Default)]
 pub enum SimpleBiomePicker<BiomeT: BiomeVariants> {
     // all variants have same chance of being selected
     #[default]

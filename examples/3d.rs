@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 use bracket_fast_noise::prelude::*;
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
 use worley_biomes::{
     bevy::debug_plugin::{DebugColor, DebugPluginSettings, GetWorley, WorleyImage},
     biome_picker::{BiomeVariants, SimpleBiomePicker},
@@ -12,7 +15,8 @@ use worley_biomes::{
 
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Debug, Default)]
 enum BiomeType {
     #[default]
     Desert,

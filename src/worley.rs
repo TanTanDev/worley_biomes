@@ -1,7 +1,9 @@
 use std::default::Default;
 use std::marker::PhantomData;
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
 use tinyvec::TinyVec;
 
 use crate::biome_picker::{BiomePicker, BiomeVariants};
@@ -10,16 +12,23 @@ use crate::utils::hash_u64;
 use crate::warp::{WarpSettings, warp_coords};
 
 ///! a biome picker based on (worley) which is offset by (noise)
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(bound(
+        serialize = "BiomeT: Serialize, Picker: Serialize",
+        deserialize = "BiomeT: Deserialize<'de>, Picker: Deserialize<'de>"
+    ))
+)]
 pub struct Worley<BiomeT, Picker>
 where
-    BiomeT: BiomeVariants + Serialize,
-    Picker: BiomePicker<BiomeT> + Serialize + Default,
+    BiomeT: BiomeVariants,
+    Picker: BiomePicker<BiomeT> + Default,
 {
     ///! biome picking
     pub biome_picker: Picker,
     pub zoom: f64,
-    #[serde(skip, default = "default_distance_fn")]
+    #[cfg_attr(feature = "serde", serde(skip, default = "default_distance_fn"))]
     pub distance_fn: fn(f64, f64) -> f64,
     pub distance_fn_config: DistanceFn,
     ///! high value: sharper borders, recommended: 0.0 -> 20.0
@@ -32,7 +41,7 @@ where
     ///! if set, biomes below this threshold, will not return from Worley::get()
     ///! recommended to be set, defaults to 0.01 = 1%
     pub kill_percent_threshold: Option<f64>,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub _phantom: PhantomData<BiomeT>,
 }
 
@@ -43,8 +52,8 @@ fn default_distance_fn() -> fn(f64, f64) -> f64 {
 
 impl<BiomeT, Picker> Default for Worley<BiomeT, Picker>
 where
-    BiomeT: BiomeVariants + Serialize,
-    Picker: BiomePicker<BiomeT> + Serialize + Default,
+    BiomeT: BiomeVariants,
+    Picker: BiomePicker<BiomeT> + Default,
 {
     fn default() -> Self {
         let distance_fn_config = DistanceFn::EuclideanSquared;
@@ -78,8 +87,8 @@ const NEIGHBOR_OFFSETS: [(i32, i32); 9] = [
 
 impl<BiomeT, Picker> Worley<BiomeT, Picker>
 where
-    BiomeT: BiomeVariants + 'static + Serialize + Default,
-    Picker: BiomePicker<BiomeT> + Serialize + Default,
+    BiomeT: BiomeVariants + 'static + Default,
+    Picker: BiomePicker<BiomeT> + Default,
 {
     pub fn set_distance_fn(&mut self, distance_fn: DistanceFn) {
         self.distance_fn = distance_fn.to_func();
