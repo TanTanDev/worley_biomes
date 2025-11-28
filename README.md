@@ -7,7 +7,10 @@ The library comes with a bevy, DebugPlugin that can visualize the worley as a te
 "serde", "bevy"
 
 ### in-depth my design decisions
-This library uses a fork of [bracket-noise](https://crates.io/crates/bracket-noise).
+This library uses a [further developed version](https://github.com/TanTanDev/bracket-fast-noise/tree/main) of 
+[bracket-noise](https://crates.io/crates/bracket-noise).
+The reason I don't fork bracket is because bracket-fast-nosie is a sub crate inside a collection of libraries.  
+My version implement serialization+deserialization with serde.
 
 My fork implements serde serialization/deserialization. I haven't done performance comparisons with other libraries, it does the job well, and I like the api. 
 
