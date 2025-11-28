@@ -1,6 +1,6 @@
 [package]
 name = "worley_biomes"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [features]
@@ -18,8 +18,8 @@ serde = { version= "1", features = ["derive"], optional = true }
 ron = {version = "0.12", optional = true}
 
 # not required, used in examples, and we have a debug_plugin for bevy 
-bevy = {version = "0.16", optional = true}
-bevy-inspector-egui = {version = "0.33.1", optional = true}
+bevy = {version = "0.17", optional = true}
+bevy-inspector-egui = {version = "0.35", optional = true}
 
 [dev-dependencies]
 # benchmarking
