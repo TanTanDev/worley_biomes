@@ -13,7 +13,7 @@ use worley_biomes::{
     worley::Worley,
 };
 
-use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
+use bevy_inspector_egui::bevy_egui::EguiPlugin;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, Default)]
@@ -58,13 +58,13 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin::default())
-        .add_plugins(WorldInspectorPlugin::new())
         // THE DEBUG PLUGIN for worley preview + tweak ui
         .add_plugins(worley_biomes::bevy::debug_plugin::DebugPlugin::<
             WorleyHolder,
             BiomeType,
             SimpleBiomePicker<BiomeType>,
         > {
+            // you can customize some parts of the tweak ui
             settings: DebugPluginSettings {
                 spawn_preview_image: true,
                 show_preview_image: true,
