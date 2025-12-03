@@ -1,4 +1,5 @@
 ## Worley biomes
+<img src="worley_preview.png" width="500" />
 A worley noise implementation, that supports k-nearest sampling + biome classification. 
 
 The library comes with a bevy, DebugPlugin that can visualize the worley as a texture + live tweak.
