@@ -12,6 +12,7 @@ serde = ["dep:serde", "dep:ron"]
 bracket-fast-noise = {git="ssh://git@github.com/TanTanDev/bracket-fast-noise.git", rev = "993b54ae2216"}
 rand = "0.9.2"
 tinyvec = {version="1.10", features =["alloc"]}
+fxhash = "0.2.1"
 
 # optional serialization
 serde = { version= "1", features = ["derive"], optional = true }

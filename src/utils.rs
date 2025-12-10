@@ -1,8 +1,8 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 pub fn hash_u64(seed: u64, x: i32, z: i32) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = fxhash::FxHasher::default();
     (seed, x, z).hash(&mut hasher);
     hasher.finish()
 }
